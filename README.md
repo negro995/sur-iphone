@@ -14,7 +14,7 @@ Stack: Next.js (App Router) · React · Tailwind CSS · Lucide.
   - Si `categoria` está vacía se infiere del título (iPhone, cargador/cable/funda/AirPods…, combo/promo).
   - Un producto es oferta si tiene `precio_oferta` o `es_oferta` marcado; aparece con badge y en "Ofertas Destacadas".
   - `imagen_url` acepta links directos o de Google Drive; si falta o no carga, se muestra una ilustración en su lugar.
-  - Para varias pestañas usá `GOOGLE_SHEET_RANGE="iPhones!A1:Z200,Accesorios!A1:Z200"` o `CATALOG_CSV_URL` (CSV publicado, separados por coma).
+  - Para varias pestañas sin API key usá `GOOGLE_SHEET_GID="0,123456789"` (el número que aparece después de `gid=` en la URL al abrir cada pestaña). Con API key: `GOOGLE_SHEET_RANGE="iPhones!A1:Z200,Accesorios!A1:Z200"`. También sirve `CATALOG_CSV_URL` (CSV publicados, separados por coma).
   - Si `Stock / Estado` dice *Agotado*, *Sin stock*, *Vendido*, *Reservado* o *No disponible*, el equipo se muestra sin botón de compra.
 - **Precios en USD**: si la hoja tiene una columna con "USD" en el encabezado, se usa tal cual. Si no, se convierte el `Precio Contado` (ARS) con `USD_ARS_RATE` o, si está vacío, con la cotización de [dolarapi.com](https://dolarapi.com) (`USD_RATE_SOURCE`, por defecto `blue`).
 - **Transferencia / depósito**: el botón "Pagar por Transferencia" abre un resumen con N° de pedido, los datos bancarios (`BANK_CBU`, `BANK_ALIAS`, `BANK_HOLDER`, `BANK_NAME`, `BANK_CUIT` en Vercel → Settings → Environment Variables) y un botón para enviar el comprobante por WhatsApp. Sin datos cargados, ofrece pedirlos por WhatsApp.

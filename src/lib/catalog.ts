@@ -83,7 +83,8 @@ function parseBattery(raw: string): string | null {
   if (!raw || /^(n\/?a|-|—|no aplica)$/i.test(raw)) return null;
   if (/^\d+([.,]\d+)?$/.test(raw)) {
     const n = Number(raw.replace(",", "."));
-    return `${Math.round(n <= 1 ? n * 100 : n)}%`;
+    const isFraction = /[.,]/.test(raw) && n <= 1;
+    return `${Math.round(isFraction ? n * 100 : n)}%`;
   }
   return raw;
 }
@@ -116,10 +117,10 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
   };
 
   const usesUSD = col.usd >= 0;
-  const toUSD = (raw: string, forceUSD = false) => {
+  const toUSD = (raw: string, isUSD = usesUSD) => {
     const v = parseMoney(raw);
     if (v == null) return null;
-    if (forceUSD || usesUSD) return Math.round(v);
+    if (isUSD) return Math.round(v);
     return usdRate ? Math.round(v / usdRate) : null;
   };
 
@@ -131,9 +132,9 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
     const title = rawTitle.replace(/iphone/gi, "iPhone");
     const category = parseCategory(cell(col.category), title);
 
-    const priceUSD = usesUSD ? toUSD(cell(col.usd)) : toUSD(cell(col.cash));
+    const priceUSD = toUSD(cell(col.usd), true) ?? toUSD(cell(col.cash), false);
     const offerHeaderUSD = col.offer >= 0 && /usd|dolar/.test(headerKey(header[col.offer]));
-    let offerPriceUSD = toUSD(cell(col.offer), offerHeaderUSD);
+    let offerPriceUSD = toUSD(cell(col.offer), offerHeaderUSD || usesUSD);
     if (offerPriceUSD != null && priceUSD != null && offerPriceUSD >= priceUSD) offerPriceUSD = null;
     const flagged = TRUTHY.test(cell(col.offerFlag));
 
@@ -173,6 +174,10 @@ async function fetchGrids(): Promise<{ grids: Grid[]; source: Catalog["source"] 
   const opts = { next: { revalidate: REVALIDATE_SECONDS, tags: ["catalog"] } };
   const key = process.env.GOOGLE_SHEETS_API_KEY;
   const csvUrls = process.env.CATALOG_CSV_URL ? list(process.env.CATALOG_CSV_URL, "") : null;
+
+  if (!key && !csvUrls && process.env.GOOGLE_SHEET_RANGE?.includes("!")) {
+    console.warn("GOOGLE_SHEET_RANGE con pestañas requiere GOOGLE_SHEETS_API_KEY; sin key usá GOOGLE_SHEET_GID.");
+  }
 
   if (key && !csvUrls) {
     const ranges = list(process.env.GOOGLE_SHEET_RANGE, "A1:Z500")

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ArrowDownWideNarrow, Flame, Search, SearchX } from "lucide-react";
 import type { BankDetails, Category, Product } from "@/lib/types";
 import { GENERATIONS } from "@/lib/config";
-import { CATEGORIES, finalPrice, matchesQuery } from "@/lib/product";
+import { CATEGORIES, matchesQuery, sortByPrice } from "@/lib/product";
 import { ProductCard } from "./product-card";
 import { TransferCheckout } from "./transfer-checkout";
 
@@ -92,12 +92,7 @@ function CatalogGrid({
         matchesQuery(p, query),
     );
     if (sort === "recent") return list;
-    const dir = sort === "price-asc" ? 1 : -1;
-    return [...list].sort(
-      (a, b) =>
-        Number(b.available) - Number(a.available) ||
-        dir * ((finalPrice(a) ?? Infinity) - (finalPrice(b) ?? Infinity)),
-    );
+    return sortByPrice(list, sort === "price-asc" ? "asc" : "desc");
   }, [products, tab, gen, query, sort, showGenerations]);
 
   const selectTab = (t: Tab) => {

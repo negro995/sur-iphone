@@ -46,3 +46,17 @@ export function normalizeImageUrl(raw: string | null | undefined): string | null
   if (drive) return `https://lh3.googleusercontent.com/d/${drive[1]}=w800`;
   return url;
 }
+
+/** Sorts by final price; products without price always go last. */
+export function sortByPrice(products: Product[], dir: "asc" | "desc") {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...products].sort((a, b) => {
+    const pa = finalPrice(a);
+    const pb = finalPrice(b);
+    return (
+      Number(b.available) - Number(a.available) ||
+      Number(pa == null) - Number(pb == null) ||
+      (pa != null && pb != null ? sign * (pa - pb) : 0)
+    );
+  });
+}
