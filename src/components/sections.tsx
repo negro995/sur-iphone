@@ -7,10 +7,37 @@ import {
   Smartphone,
   Wallet,
   Handshake,
+  ShieldCheck,
+  Truck,
+  Landmark,
 } from "lucide-react";
 import { STORE, formatPhone } from "@/lib/config";
 import { financingLink, generalSalesLink } from "@/lib/whatsapp";
 import { InstagramIcon, WhatsAppIcon } from "./brand-icons";
+
+const TRUST = [
+  { icon: ShieldCheck, title: "30 días de garantía escrita", desc: "Comprá con respaldo" },
+  { icon: Truck, title: "Envíos o retiros", desc: "Coordinados por WhatsApp" },
+  { icon: Landmark, title: "USD o ARS", desc: "Pagos por transferencia" },
+];
+
+export function TrustBanner() {
+  return (
+    <section aria-label="Por qué comprar en Sur IPhone" className="border-b border-white/10 bg-white/[0.03]">
+      <ul className="mx-auto grid max-w-6xl grid-cols-3 divide-x divide-white/10 px-2 py-3 sm:px-6">
+        {TRUST.map(({ icon: Icon, title, desc }) => (
+          <li key={title} className="flex flex-col items-center gap-1 px-2 text-center sm:flex-row sm:justify-center sm:gap-3 sm:text-left">
+            <Icon className="size-5 shrink-0 text-emerald-300" />
+            <div>
+              <p className="text-xs font-semibold sm:text-sm">{title}</p>
+              <p className="hidden text-xs text-white/50 sm:block">{desc}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 export function Hero({ count, fromUSD }: { count: number; fromUSD: number | null }) {
   return (
@@ -27,8 +54,8 @@ export function Hero({ count, fromUSD }: { count: number; fromUSD: number | null
           </span>
         </h1>
         <p className="mx-auto mt-5 max-w-xl text-base text-white/60 text-pretty sm:text-lg">
-          Del iPhone 11 al iPhone 17. Precios en dólares contado, stock actualizado en tiempo real y
-          financiación en cuotas.
+          Del iPhone 11 al iPhone 17, accesorios y combos. Precios en dólares contado, stock
+          actualizado en tiempo real y financiación en cuotas.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <a
@@ -48,7 +75,7 @@ export function Hero({ count, fromUSD }: { count: number; fromUSD: number | null
         </div>
         <dl className="mx-auto mt-14 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { icon: Smartphone, k: `${count || "—"}`, v: "equipos en stock" },
+            { icon: Smartphone, k: `${count || "—"}`, v: "productos en stock" },
             { icon: Banknote, k: "USD", v: "precio contado" },
             { icon: CreditCard, k: "3 cuotas", v: "con tarjeta" },
             { icon: RefreshCw, k: "En vivo", v: "stock y precios" },
