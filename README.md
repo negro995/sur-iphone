@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sur IPhone — tienda online
 
-## Getting Started
+Catálogo de iPhones de **Sur IPhone** ([@esquel_iphone](https://instagram.com/esquel_iphone)) con precios en USD, stock sincronizado desde Google Sheets y checkout por WhatsApp.
 
-First, run the development server:
+Stack: Next.js (App Router) · React · Tailwind CSS · Lucide.
+
+## Cómo funciona
+
+- **Catálogo en vivo**: `src/lib/catalog.ts` lee la hoja de Google (`GOOGLE_SHEET_ID`) y revalida cada 60 s (ISR).
+  - Con `GOOGLE_SHEETS_API_KEY` usa la Google Sheets API v4; sin key usa el export CSV público de la hoja (la hoja tiene que estar compartida como "cualquiera con el enlace puede ver").
+  - Las columnas se detectan por el encabezado (`Modelo`, `Almacenamiento`, `Condición`, `Batería`, `Precio Contado`, `Stock / Estado`), así que se pueden reordenar.
+  - Si `Stock / Estado` dice *Agotado*, *Sin stock*, *Vendido*, *Reservado* o *No disponible*, el equipo se muestra sin botón de compra.
+- **Precios en USD**: si la hoja tiene una columna con "USD" en el encabezado, se usa tal cual. Si no, se convierte el `Precio Contado` (ARS) con `USD_ARS_RATE` o, si está vacío, con la cotización de [dolarapi.com](https://dolarapi.com) (`USD_RATE_SOURCE`, por defecto `blue`).
+- **WhatsApp**: "Comprar Contado (USD)" → +54 2945 54-6004 · "Consultar Financiación / Cuotas" → +54 2945 69-0678 (`src/lib/config.ts`, mensajes en `src/lib/whatsapp.ts`).
+
+## Desarrollo
 
 ```bash
+cp .env.example .env.local   # opcional
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Deploy
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Pensado para Vercel: importar el repo, sin configuración extra. Variables opcionales en `.env.example`.
