@@ -16,7 +16,7 @@ import { financingLink, generalSalesLink } from "@/lib/whatsapp";
 import { InstagramIcon, WhatsAppIcon } from "./brand-icons";
 
 const TRUST = [
-  { icon: ShieldCheck, title: "Garantía escrita", desc: "Comprá con respaldo" },
+  { icon: ShieldCheck, title: "30 días de garantía escrita", desc: "Comprá con respaldo" },
   { icon: Truck, title: "Envíos o retiros", desc: "Coordinados por WhatsApp" },
   { icon: Landmark, title: "USD o ARS", desc: "Pagos por transferencia" },
 ];

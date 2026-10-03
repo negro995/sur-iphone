@@ -7,6 +7,7 @@ export const REVALIDATE_SECONDS = 60;
 type Grid = string[][];
 
 const SOLD_OUT = /(agotad|sin stock|vendid|no disponible|reservad)/i;
+const FALSY = /^(no|n|false|falso|0)$/i;
 const TRUTHY = /^(si|sí|s|true|verdadero|x|1|yes|oferta|✓|✔|✅)$/i;
 const ACCESSORY = /(cargador|cable|adaptador|auricular|airpods|funda|case|vidrio|templado|protector|magsafe|power ?bank|fuente|cabezal|soporte|malla|correa)/i;
 
@@ -93,12 +94,30 @@ function emptyToNull(s: string) {
   return s && !/^(n\/?a|-|—)$/i.test(s) ? s : null;
 }
 
+function isHeaderRow(row: string[]) {
+  const keys = row.map((c) => headerKey(String(c)));
+  const hasTitle = keys.some((h) => /^(titulo|producto|nombre)$/.test(h) || /modelo/.test(h));
+  const others = keys.filter((h) =>
+    /^(id\b|categoria|precio|stock|bateria|estado|condicion|almacenamiento|imagen|es oferta)/.test(h),
+  ).length;
+  return hasTitle && others >= 1;
+}
+
+/** A tab may hold several blocks (e.g. iPhones, then accessories below), each with its own header row. */
 export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = ""): Product[] {
-  const headerIdx = grid.findIndex((r) =>
-    r.some((c) => /^(titulo|modelo|producto|nombre)/.test(headerKey(String(c))) || /modelo/.test(headerKey(String(c)))),
+  const starts = grid.flatMap((r, i) => (isHeaderRow(r) ? [i] : []));
+  if (!starts.length) throw new Error("No se encontró la fila de encabezados (titulo / Modelo)");
+  return starts.flatMap((start, s) =>
+    parseSection(
+      grid[start].map(String),
+      grid.slice(start + 1, starts[s + 1] ?? grid.length),
+      usdRate,
+      s ? `${keyPrefix}${s}-` : keyPrefix,
+    ),
   );
-  if (headerIdx === -1) throw new Error("No se encontró la fila de encabezados (titulo / Modelo)");
-  const header = grid[headerIdx].map(String);
+}
+
+function parseSection(header: string[], rows: Grid, usdRate: number | null, keyPrefix: string): Product[] {
 
   const col = {
     id: findCol(header, (h) => /^id\b/.test(h) || /codigo/.test(h)),
@@ -125,7 +144,7 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
   };
 
   const products: Product[] = [];
-  grid.slice(headerIdx + 1).forEach((r, i) => {
+  rows.forEach((r, i) => {
     const cell = (c: number) => (c >= 0 ? String(r[c] ?? "").trim() : "");
     const rawTitle = cell(col.title);
     if (!rawTitle) return;
@@ -137,6 +156,7 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
     let offerPriceUSD = toUSD(cell(col.offer), offerHeaderUSD || usesUSD);
     if (offerPriceUSD != null && priceUSD != null && offerPriceUSD >= priceUSD) offerPriceUSD = null;
     const flagged = TRUTHY.test(cell(col.offerFlag));
+    if (FALSY.test(cell(col.offerFlag))) offerPriceUSD = null;
 
     const stock = cell(col.stock) || "Disponible";
     const gen = category === "iPhones" ? title.match(/iphone\s*(\d{2})/i) : null;
@@ -151,7 +171,7 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
       storage: storage ? storage.replace(/\s*gb$/i, " GB").replace(/\s*tb$/i, " TB") : null,
       condition: emptyToNull(cell(col.condition)),
       state: emptyToNull(cell(col.state)),
-      battery: parseBattery(cell(col.battery)),
+      battery: category === "iPhones" || /iphone/i.test(title) ? parseBattery(cell(col.battery)) : null,
       priceUSD,
       offerPriceUSD,
       isOffer: flagged || offerPriceUSD != null,
