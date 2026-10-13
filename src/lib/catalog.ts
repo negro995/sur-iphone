@@ -1,6 +1,6 @@
 import { STORE } from "./config";
 import { normalizeImageUrl, normalizeText } from "./product";
-import type { Catalog, Category, Product } from "./types";
+import type { Catalog, Category, Product, Testimonial, UsdRate } from "./types";
 
 export const REVALIDATE_SECONDS = 60;
 
@@ -94,7 +94,12 @@ function emptyToNull(s: string) {
   return s && !/^(n\/?a|-|—)$/i.test(s) ? s : null;
 }
 
+function isTestimonialHeader(row: string[]) {
+  return row.some((c) => /^(testimonio|opinion|resena|comentario)/.test(headerKey(String(c))));
+}
+
 function isHeaderRow(row: string[]) {
+  if (isTestimonialHeader(row)) return false;
   const keys = row.map((c) => headerKey(String(c)));
   const hasTitle = keys.some((h) => /^(titulo|producto|nombre)$/.test(h) || /modelo/.test(h));
   const others = keys.filter((h) =>
@@ -107,14 +112,52 @@ function isHeaderRow(row: string[]) {
 export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = ""): Product[] {
   const starts = grid.flatMap((r, i) => (isHeaderRow(r) ? [i] : []));
   if (!starts.length) throw new Error("No se encontró la fila de encabezados (titulo / Modelo)");
+  const bounds = sectionBounds(grid);
   return starts.flatMap((start, s) =>
     parseSection(
       grid[start].map(String),
-      grid.slice(start + 1, starts[s + 1] ?? grid.length),
+      grid.slice(start + 1, bounds.find((b) => b > start) ?? grid.length),
       usdRate,
       s ? `${keyPrefix}${s}-` : keyPrefix,
     ),
   );
+}
+
+function sectionBounds(grid: Grid) {
+  return grid.flatMap((r, i) => (isHeaderRow(r) || isTestimonialHeader(r) ? [i] : []));
+}
+
+/** Testimonial blocks: a header row with `testimonio` (+ cliente, ciudad, captura_url, estrellas). */
+export function gridToTestimonials(grid: Grid, keyPrefix = ""): Testimonial[] {
+  const bounds = sectionBounds(grid);
+  return grid.flatMap((row, start) => {
+    if (!isTestimonialHeader(row)) return [];
+    const header = row.map(String);
+    const col = {
+      quote: findCol(header, (h) => /^(testimonio|opinion|resena|comentario)/.test(h)),
+      name: findCol(header, (h) => /^(cliente|nombre|autor)/.test(h)),
+      location: findCol(header, (h) => /^(ciudad|localidad|ubicacion|lugar)/.test(h)),
+      image: findCol(header, (h) => /captura|imagen|foto/.test(h)),
+      rating: findCol(header, (h) => /estrellas|puntaje|calificacion/.test(h)),
+    };
+    const rows = grid.slice(start + 1, bounds.find((b) => b > start) ?? grid.length);
+    return rows.flatMap((r, i) => {
+      const cell = (j: number) => (j >= 0 ? String(r[j] ?? "").trim() : "");
+      const quote = cell(col.quote).replace(/^["“]|["”]$/g, "");
+      if (!quote) return [];
+      const stars = Number(cell(col.rating).replace(/[^\d]/g, "") || cell(col.rating).split("⭐").length - 1);
+      return [
+        {
+          id: `${keyPrefix}${start}-${i}`,
+          quote,
+          name: emptyToNull(cell(col.name)),
+          location: emptyToNull(cell(col.location)),
+          imageUrl: normalizeImageUrl(cell(col.image)),
+          rating: stars >= 1 && stars <= 5 ? stars : null,
+        },
+      ];
+    });
+  });
 }
 
 function parseSection(header: string[], rows: Grid, usdRate: number | null, keyPrefix: string): Product[] {
@@ -225,18 +268,20 @@ async function fetchGrids(): Promise<{ grids: Grid[]; source: Catalog["source"] 
   return { grids, source: "csv" };
 }
 
-/** ARS per USD used to convert the sheet's peso prices when it has no USD column. */
-async function fetchUsdRate(): Promise<number | null> {
+export const RATE_SOURCE = process.env.USD_RATE_SOURCE ?? "blue";
+
+/** ARS per USD: converts the sheet's peso prices and powers the ARS estimate in the UI. */
+async function fetchUsdRate(): Promise<UsdRate | null> {
   const fixed = Number(process.env.USD_ARS_RATE);
-  if (fixed > 0) return fixed;
-  const casa = process.env.USD_RATE_SOURCE ?? "blue";
+  if (fixed > 0) return { ars: fixed, label: "Cotización", updatedAt: null };
   try {
-    const res = await fetch(`https://dolarapi.com/v1/dolares/${casa}`, {
-      next: { revalidate: 900 },
+    const res = await fetch(`https://dolarapi.com/v1/dolares/${RATE_SOURCE}`, {
+      next: { revalidate: 600 },
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { venta?: number };
-    return data.venta && data.venta > 0 ? data.venta : null;
+    const data = (await res.json()) as { venta?: number; nombre?: string; fechaActualizacion?: string };
+    if (!data.venta || data.venta <= 0) return null;
+    return { ars: data.venta, label: `Dólar ${data.nombre ?? RATE_SOURCE}`, updatedAt: data.fechaActualizacion ?? null };
   } catch {
     return null;
   }
@@ -257,11 +302,14 @@ export function sortProducts(products: Product[]) {
 export async function getCatalog(): Promise<Catalog> {
   try {
     const [{ grids, source }, rate] = await Promise.all([fetchGrids(), fetchUsdRate()]);
-    const products = sortProducts(grids.flatMap((g, i) => gridToProducts(g, rate, `${i}-`)));
-    return { products, updatedAt: new Date().toISOString(), source };
+    const products = sortProducts(grids.flatMap((g, i) => gridToProducts(g, rate?.ars ?? null, `${i}-`)));
+    const testimonials = grids.flatMap((g, i) => gridToTestimonials(g, `${i}-`));
+    return { products, testimonials, usdRate: rate, updatedAt: new Date().toISOString(), source };
   } catch (e) {
     return {
       products: [],
+      testimonials: [],
+      usdRate: null,
       updatedAt: new Date().toISOString(),
       source: "error",
       error: e instanceof Error ? e.message : String(e),

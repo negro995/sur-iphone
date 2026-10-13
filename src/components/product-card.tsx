@@ -2,7 +2,7 @@
 
 import { BatteryFull, BatteryMedium, CreditCard, Flame, HardDrive, Landmark, ShieldCheck, Sparkles } from "lucide-react";
 import type { Product } from "@/lib/types";
-import { formatUSD } from "@/lib/format";
+import { formatARS, formatUSD } from "@/lib/format";
 import { discountPercent, finalPrice } from "@/lib/product";
 import { cashPurchaseLink, financingLink } from "@/lib/whatsapp";
 import { ProductImage } from "./product-media";
@@ -11,9 +11,11 @@ import { WhatsAppIcon } from "./brand-icons";
 export function ProductCard({
   product: p,
   onTransfer,
+  arsRate = null,
 }: {
   product: Product;
   onTransfer: (p: Product) => void;
+  arsRate?: number | null;
 }) {
   const price = finalPrice(p);
   const off = discountPercent(p);
@@ -21,14 +23,14 @@ export function ProductCard({
     <article
       className={`group relative flex flex-col overflow-hidden rounded-3xl border bg-gradient-to-b from-white/[0.07] to-white/[0.02] transition hover:border-white/20 ${p.isOffer ? "border-amber-400/30" : "border-white/10"} ${p.available ? "" : "opacity-60"}`}
     >
-      <div className="relative flex h-52 items-center justify-center bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.08),transparent_70%)] px-10 pt-8 pb-3">
+      <div className="relative m-2 flex h-56 items-center justify-center rounded-[1.25rem] bg-gradient-to-b from-[#f5f5f7] to-[#e2e2e7] px-10 pt-10 pb-4">
         <div className="flex h-full w-full items-center justify-center transition duration-500 group-hover:-translate-y-1 group-hover:scale-[1.03]">
           <ProductImage product={p} />
         </div>
         <span
-          className={`absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium backdrop-blur ${p.available ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}
+          className={`absolute top-4 left-4 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium shadow-sm backdrop-blur ${p.available ? "bg-white/90 text-emerald-700" : "bg-white/90 text-red-600"}`}
         >
-          <span className={`size-1.5 rounded-full ${p.available ? "bg-emerald-400" : "bg-red-400"}`} />
+          <span className={`size-1.5 rounded-full ${p.available ? "bg-emerald-500" : "bg-red-500"}`} />
           {p.stock}
         </span>
         {p.isOffer && (
@@ -71,6 +73,12 @@ export function ProductCard({
               <p className="text-sm text-white/40 line-through">{formatUSD(p.priceUSD)}</p>
             )}
           </div>
+          {arsRate && price != null && (
+            <p className="mt-0.5 text-sm text-white/60">
+              ≈ <span className="font-semibold text-white/85">{formatARS(price * arsRate)}</span> ARS{" "}
+              <span className="text-white/40">estimado</span>
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">

@@ -1,10 +1,11 @@
 import { AlertTriangle } from "lucide-react";
-import { getCatalog } from "@/lib/catalog";
+import { RATE_SOURCE, getCatalog } from "@/lib/catalog";
 import { getBankDetails } from "@/lib/bank";
 import { finalPrice } from "@/lib/product";
 import { Header } from "@/components/header";
 import { Storefront } from "@/components/storefront";
 import { FloatingWhatsApp, Financing, Footer, Hero, HowToBuy, TrustBanner } from "@/components/sections";
+import { Testimonials } from "@/components/testimonials";
 
 export const revalidate = 60;
 
@@ -19,13 +20,13 @@ export default async function Home() {
 
   return (
     <>
-      <Header />
+      <Header showReviews={catalog.testimonials.length > 0} />
       <TrustBanner />
       <main className="flex-1">
         <Hero count={inStock.length} fromUSD={fromUSD} />
 
         {catalog.error ? (
-          <section id="catalogo" className="scroll-mt-14 border-t border-white/10">
+          <section id="catalogo" className="scroll-mt-28 border-t border-white/10">
             <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
               <div className="flex items-start gap-3 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-6 text-amber-100">
                 <AlertTriangle className="mt-0.5 size-5 shrink-0" />
@@ -39,10 +40,16 @@ export default async function Home() {
             </div>
           </section>
         ) : (
-          <Storefront products={catalog.products} bank={getBankDetails()} />
+          <Storefront
+            products={catalog.products}
+            bank={getBankDetails()}
+            usdRate={catalog.usdRate}
+            rateSource={RATE_SOURCE}
+          />
         )}
 
         <Financing />
+        <Testimonials items={catalog.testimonials} />
         <HowToBuy />
       </main>
       <Footer />

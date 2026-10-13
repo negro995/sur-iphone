@@ -6,23 +6,30 @@ import { STORE } from "@/lib/config";
 import { generalSalesLink } from "@/lib/whatsapp";
 import { InstagramIcon, WhatsAppIcon } from "./brand-icons";
 
-const NAV = [
+const LINKS = [
   { href: "#catalogo", label: "Catálogo" },
   { href: "#financiacion", label: "Financiación" },
+  { href: "#opiniones", label: "Opiniones" },
   { href: "#como-comprar", label: "Cómo comprar" },
   { href: "#contacto", label: "Contacto" },
 ];
 
-export function Header() {
+export function Header({ showReviews = false }: { showReviews?: boolean }) {
   const [open, setOpen] = useState(false);
+  const NAV = LINKS.filter((n) => showReviews || n.href !== "#opiniones");
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-black/70 backdrop-blur-xl">
-      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-        <a href="#" className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="grid size-7 place-items-center rounded-lg bg-white text-black">
-            <Smartphone className="size-4" />
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:h-[4.5rem] sm:px-6">
+        <a href="#" className="flex items-center gap-2.5 sm:gap-3" aria-label={`${STORE.name} · inicio`}>
+          <span className="grid size-10 place-items-center rounded-xl bg-gradient-to-b from-white to-neutral-200 text-black shadow-lg shadow-white/10 ring-1 ring-white/20 sm:size-11">
+            <Smartphone className="size-6" strokeWidth={2.2} />
           </span>
-          {STORE.name}
+          <span className="flex flex-col leading-none">
+            <span className="text-xl font-extrabold tracking-tight sm:text-2xl">{STORE.name}</span>
+            <span className="mt-1 hidden text-[11px] font-medium tracking-wide text-white/50 sm:block">
+              iPhones · {STORE.location}
+            </span>
+          </span>
         </a>
 
         <nav className="hidden items-center gap-7 text-sm text-white/70 md:flex">

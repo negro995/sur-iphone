@@ -1,18 +1,61 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { ArrowDownWideNarrow, Flame, Search, SearchX } from "lucide-react";
-import type { BankDetails, Category, Product } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowDownWideNarrow, Flame, RefreshCw, Search, SearchX } from "lucide-react";
+import type { BankDetails, Category, Product, UsdRate } from "@/lib/types";
 import { GENERATIONS } from "@/lib/config";
-import { CATEGORIES, matchesQuery, sortByPrice } from "@/lib/product";
+import {
+  CATEGORIES,
+  type ConditionGroup,
+  conditionGroup,
+  matchesQuery,
+  sortByPrice,
+  storageGB,
+  storageLabel,
+} from "@/lib/product";
 import { ProductCard } from "./product-card";
 import { TransferCheckout } from "./transfer-checkout";
 
 type Sort = "recent" | "price-asc" | "price-desc";
 type Tab = "all" | Category | "offers";
 
-export function Storefront({ products, bank }: { products: Product[]; bank: BankDetails }) {
+type Currency = "USD" | "ARS";
+
+/** Keeps the server rate and refreshes it from DolarAPI in the browser. */
+function useLiveRate(initial: UsdRate | null, source: string) {
+  const [rate, setRate] = useState(initial);
+  useEffect(() => {
+    if (!initial || initial.updatedAt == null) return;
+    const load = () =>
+      fetch(`https://dolarapi.com/v1/dolares/${source}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { venta?: number; nombre?: string; fechaActualizacion?: string } | null) => {
+          if (d?.venta && d.venta > 0)
+            setRate({ ars: d.venta, label: `Dólar ${d.nombre ?? source}`, updatedAt: d.fechaActualizacion ?? null });
+        })
+        .catch(() => {});
+    load();
+    const id = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [initial, source]);
+  return rate;
+}
+
+export function Storefront({
+  products,
+  bank,
+  usdRate,
+  rateSource,
+}: {
+  products: Product[];
+  bank: BankDetails;
+  usdRate: UsdRate | null;
+  rateSource: string;
+}) {
   const [checkout, setCheckout] = useState<Product | null>(null);
+  const [currency, setCurrency] = useState<Currency>("USD");
+  const rate = useLiveRate(usdRate, rateSource);
+  const arsRate = currency === "ARS" && rate ? rate.ars : null;
   const closeCheckout = useCallback(() => setCheckout(null), []);
   const offers = useMemo(() => products.filter((p) => p.isOffer && p.available), [products]);
 
@@ -30,7 +73,7 @@ export function Storefront({ products, bank }: { products: Product[]; bank: Bank
             <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
               {offers.map((p) => (
                 <div key={p.key} className="w-[85%] shrink-0 snap-start sm:w-[340px]">
-                  <ProductCard product={p} onTransfer={setCheckout} />
+                  <ProductCard product={p} onTransfer={setCheckout} arsRate={arsRate} />
                 </div>
               ))}
             </div>
@@ -45,9 +88,13 @@ export function Storefront({ products, bank }: { products: Product[]; bank: Bank
               <p className="text-sm font-medium text-white/50">Stock actualizado</p>
               <h2 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Catálogo</h2>
             </div>
-            <p className="text-sm text-white/50">Precios en USD · pago único contado / transferencia</p>
+            {rate ? (
+              <CurrencySwitch currency={currency} onChange={setCurrency} rate={rate} />
+            ) : (
+              <p className="text-sm text-white/50">Precios en USD · pago único contado / transferencia</p>
+            )}
           </div>
-          <CatalogGrid products={products} offersCount={offers.length} onTransfer={setCheckout} />
+          <CatalogGrid products={products} offersCount={offers.length} onTransfer={setCheckout} arsRate={arsRate} />
         </div>
       </section>
 
@@ -56,17 +103,68 @@ export function Storefront({ products, bank }: { products: Product[]; bank: Bank
   );
 }
 
+/** HH:MM in Argentina (UTC-3, no DST); manual so server and browser render identical text. */
+function arTime(iso: string) {
+  const d = new Date(new Date(iso).getTime() - 3 * 3600_000);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+}
+
+function CurrencySwitch({
+  currency,
+  onChange,
+  rate,
+}: {
+  currency: Currency;
+  onChange: (c: Currency) => void;
+  rate: UsdRate;
+}) {
+  const time = rate.updatedAt
+    ? arTime(rate.updatedAt)
+    : null;
+  return (
+    <div className="flex flex-col items-start gap-1.5 sm:items-end">
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-white/50">Ver precios en</span>
+        <div className="flex rounded-full border border-white/10 bg-white/5 p-1" role="radiogroup" aria-label="Moneda">
+          {(["USD", "ARS"] as const).map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={currency === c}
+              onClick={() => onChange(c)}
+              className={`rounded-full px-3.5 py-1 text-xs font-semibold transition ${currency === c ? "bg-white text-black" : "text-white/70 hover:text-white"}`}
+            >
+              {c === "USD" ? "USD" : "USD + ARS"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs text-white/45">
+        <RefreshCw className="size-3" />
+        {rate.label} hoy: <span className="font-semibold text-white/70">$ {rate.ars.toLocaleString("es-AR")}</span>
+        {time && <> · {time} h</>}
+      </p>
+    </div>
+  );
+}
+
 function CatalogGrid({
   products,
   offersCount,
   onTransfer,
+  arsRate,
 }: {
   products: Product[];
   offersCount: number;
   onTransfer: (p: Product) => void;
+  arsRate: number | null;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const [gen, setGen] = useState<number | "all">("all");
+  const [storage, setStorage] = useState<number | "all">("all");
+  const [cond, setCond] = useState<ConditionGroup | "all">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
 
@@ -84,25 +182,56 @@ function CatalogGrid({
 
   const showGenerations = (tab === "all" || tab === "iPhones") && genCounts.size > 0;
 
+  const inTab = useMemo(
+    () => products.filter((p) => tab === "all" || (tab === "offers" ? p.isOffer : p.category === tab)),
+    [products, tab],
+  );
+
+  const storageOptions = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of inTab) {
+      const gb = storageGB(p);
+      if (gb) m.set(gb, (m.get(gb) ?? 0) + 1);
+    }
+    return [...m].sort((a, b) => a[0] - b[0]);
+  }, [inTab]);
+
+  const condOptions = useMemo(() => {
+    const m = new Map<ConditionGroup, number>();
+    for (const p of inTab) {
+      const c = conditionGroup(p);
+      if (c) m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return (["Nuevo", "Usado"] as const).filter((c) => m.has(c)).map((c) => [c, m.get(c)!] as const);
+  }, [inTab]);
+
   const visible = useMemo(() => {
-    const list = products.filter(
+    const list = inTab.filter(
       (p) =>
-        (tab === "all" || (tab === "offers" ? p.isOffer : p.category === tab)) &&
         (!showGenerations || gen === "all" || p.generation === gen) &&
+        (storage === "all" || storageGB(p) === storage) &&
+        (cond === "all" || conditionGroup(p) === cond) &&
         matchesQuery(p, query),
     );
     if (sort === "recent") return list;
     return sortByPrice(list, sort === "price-asc" ? "asc" : "desc");
-  }, [products, tab, gen, query, sort, showGenerations]);
+  }, [inTab, gen, storage, cond, query, sort, showGenerations]);
+
+  const filtered = gen !== "all" || storage !== "all" || cond !== "all";
+  const clearFilters = () => {
+    setGen("all");
+    setStorage("all");
+    setCond("all");
+  };
 
   const selectTab = (t: Tab) => {
     setTab(t);
-    setGen("all");
+    clearFilters();
   };
 
   return (
     <div>
-      <div className="z-30 sm:sticky sm:top-14 -mx-4 mb-8 border-b border-white/5 bg-black/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
+      <div className="z-30 sm:sticky sm:top-[4.5rem] -mx-4 mb-8 border-b border-white/5 bg-black/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
         <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Categorías">
           <div className="flex shrink-0 gap-1 rounded-full border border-white/10 bg-white/5 p-1">
             <CategoryTab active={tab === "all"} onClick={() => selectTab("all")} count={products.length}>
@@ -144,6 +273,37 @@ function CatalogGrid({
           </div>
         )}
 
+        {(storageOptions.length > 1 || condOptions.length > 1) && (
+          <div className="no-scrollbar -mx-1 mt-3 flex items-center gap-2 overflow-x-auto px-1" aria-label="Filtros rápidos">
+            {storageOptions.length > 1 && (
+              <>
+                <span className="shrink-0 text-xs font-medium text-white/40">Capacidad</span>
+                {storageOptions.map(([gb, n]) => (
+                  <FilterChip key={gb} active={storage === gb} onClick={() => setStorage(storage === gb ? "all" : gb)} count={n}>
+                    {storageLabel(gb)}
+                  </FilterChip>
+                ))}
+              </>
+            )}
+            {storageOptions.length > 1 && condOptions.length > 1 && <span className="mx-1 h-5 w-px shrink-0 bg-white/15" />}
+            {condOptions.length > 1 && (
+              <>
+                <span className="shrink-0 text-xs font-medium text-white/40">Condición</span>
+                {condOptions.map(([c, n]) => (
+                  <FilterChip key={c} active={cond === c} onClick={() => setCond(cond === c ? "all" : c)} count={n}>
+                    {c}
+                  </FilterChip>
+                ))}
+              </>
+            )}
+            {filtered && (
+              <button type="button" onClick={clearFilters} className="ml-1 shrink-0 text-xs text-white/60 underline underline-offset-4 hover:text-white">
+                Limpiar
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="mt-3 flex gap-2">
           <label className="relative flex-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
@@ -175,7 +335,7 @@ function CatalogGrid({
       {visible.length ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((p) => (
-            <ProductCard key={p.key} product={p} onTransfer={onTransfer} />
+            <ProductCard key={p.key} product={p} onTransfer={onTransfer} arsRate={arsRate} />
           ))}
         </div>
       ) : (
