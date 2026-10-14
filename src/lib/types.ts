@@ -18,8 +18,21 @@ export type Product = {
   available: boolean;
 };
 
+export type Testimonial = {
+  id: string;
+  quote: string;
+  name: string | null;
+  location: string | null;
+  imageUrl: string | null;
+  rating: number | null;
+};
+
+export type UsdRate = { ars: number; label: string; updatedAt: string | null };
+
 export type Catalog = {
   products: Product[];
+  testimonials: Testimonial[];
+  usdRate: UsdRate | null;
   updatedAt: string;
   source: "sheets-api" | "csv" | "error";
   error?: string;

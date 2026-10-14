@@ -96,13 +96,13 @@ const METHODS = [
   {
     icon: Wallet,
     title: "Mercado Pago",
-    desc: "Pagá con tu cuenta de Mercado Pago, dinero en cuenta o tarjetas asociadas. Te enviamos el link de pago.",
+    desc: "Pagá con tu cuenta de Mercado Pago o dinero en cuenta. Te enviamos el link de pago.",
     accent: "from-sky-500/20 to-sky-500/0 text-sky-300",
   },
   {
     icon: CreditCard,
     title: "Tarjeta de crédito en 3 cuotas",
-    desc: "Llevate tu iPhone en 3 cuotas con tarjeta de crédito. Consultanos el valor de cada cuota para el modelo que elijas.",
+    desc: "Todas las tarjetas de crédito, excepto Mastercard. Consultanos el valor de cada cuota para el modelo que elijas.",
     accent: "from-violet-500/20 to-violet-500/0 text-violet-300",
   },
   {
@@ -120,7 +120,8 @@ export function Financing() {
         <SectionTitle eyebrow="Medios de pago" title="Financiación y Cuotas">
           Elegí cómo pagar. Los precios publicados son en USD, pago único contado o transferencia.
         </SectionTitle>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <CardsNotice className="mt-8" />
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
           {METHODS.map(({ icon: Icon, title, desc, accent }) => (
             <div
               key={title}
@@ -155,6 +156,22 @@ export function Financing() {
         </div>
       </div>
     </section>
+  );
+}
+
+export function CardsNotice({ className = "" }: { className?: string }) {
+  return (
+    <div className={`flex items-start gap-4 rounded-3xl border border-sky-400/30 bg-gradient-to-r from-sky-500/15 to-violet-500/10 p-5 sm:items-center sm:p-6 ${className}`}>
+      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-sky-400/15 text-sky-200">
+        <CreditCard className="size-5" />
+      </span>
+      <div>
+        <p className="text-base font-semibold text-balance sm:text-lg">
+          Aceptamos todas las tarjetas de crédito (excepto Mastercard) y Mercado Pago
+        </p>
+        <p className="mt-1 text-sm text-white/60">Consultá las cuotas disponibles para tu equipo por WhatsApp.</p>
+      </div>
+    </div>
   );
 }
 

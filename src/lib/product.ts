@@ -60,3 +60,23 @@ export function sortByPrice(products: Product[], dir: "asc" | "desc") {
     );
   });
 }
+
+/** Storage in GB from the storage column or the title ("1 TB" → 1024). */
+export function storageGB(p: Product): number | null {
+  const m = `${p.storage ?? ""} ${p.title}`.match(/(\d+)\s*(gb|tb)\b/i);
+  if (!m) return null;
+  return Number(m[1]) * (/tb/i.test(m[2]) ? 1024 : 1);
+}
+
+export function storageLabel(gb: number) {
+  return gb >= 1024 ? `${gb / 1024} TB` : `${gb} GB`;
+}
+
+export type ConditionGroup = "Nuevo" | "Usado";
+
+export function conditionGroup(p: Product): ConditionGroup | null {
+  const t = normalizeText(`${p.condition ?? ""} ${p.state ?? ""}`);
+  if (/usad|reacond|seminuev|como nuevo|open ?box|exhibicion/.test(t)) return "Usado";
+  if (/nuev|sellad/.test(t)) return "Nuevo";
+  return null;
+}
