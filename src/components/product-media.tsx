@@ -15,7 +15,7 @@ export function ProductImage({ product: p }: { product: Product }) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const ref = useRef<HTMLImageElement>(null);
-  const src = p.imageUrl;
+  const src = p.imageUrl ? `/api/product-image?src=${encodeURIComponent(p.imageUrl)}` : null;
 
   useEffect(() => {
     // The image may have errored before hydration attached onError.
@@ -44,7 +44,7 @@ export function ProductImage({ product: p }: { product: Product }) {
         referrerPolicy="no-referrer"
         onLoad={() => setLoaded(true)}
         onError={() => setFailedSrc(src)}
-        className={`h-full w-full object-contain drop-shadow-[0_18px_22px_rgba(0,0,0,0.28)] transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+        className={`h-full w-full object-contain transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
       />
     </div>
   );

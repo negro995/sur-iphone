@@ -23,8 +23,8 @@ export function ProductCard({
     <article
       className={`group relative flex flex-col overflow-hidden rounded-3xl border bg-gradient-to-b from-white/[0.07] to-white/[0.02] transition hover:border-white/20 ${p.isOffer ? "border-amber-400/30" : "border-white/10"} ${p.available ? "" : "opacity-60"}`}
     >
-      <div className="relative m-2 flex h-56 items-center justify-center rounded-[1.25rem] bg-gradient-to-b from-[#f5f5f7] to-[#e2e2e7] px-10 pt-10 pb-4">
-        <div className="flex h-full w-full items-center justify-center transition duration-500 group-hover:-translate-y-1 group-hover:scale-[1.03]">
+      <div className="relative m-2 aspect-[3/2] rounded-[1.25rem] bg-[#D1D1D6]">
+        <div className="absolute inset-x-4 top-7 bottom-4 flex items-center justify-center transition duration-500 group-hover:-translate-y-1 group-hover:scale-[1.03]">
           <ProductImage product={p} />
         </div>
         <span
