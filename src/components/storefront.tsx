@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowDownWideNarrow, Flame, RefreshCw, Search, SearchX } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, Flame, RefreshCw, Search, SearchX } from "lucide-react";
 import type { BankDetails, Category, Product, UsdRate } from "@/lib/types";
 import { GENERATIONS } from "@/lib/config";
 import {
@@ -15,6 +15,77 @@ import {
 } from "@/lib/product";
 import { ProductCard } from "./product-card";
 import { TransferCheckout } from "./transfer-checkout";
+
+function OffersRail({ children }: { children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ prev: false, next: false });
+
+  const update = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    setEdges({
+      prev: el.scrollLeft > 4,
+      next: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [update]);
+
+  const scroll = (dir: 1 | -1) => {
+    const el = ref.current;
+    el?.scrollBy({ left: dir * el.clientWidth * 0.9, behavior: "smooth" });
+  };
+
+  const arrow =
+    "grid size-11 place-items-center rounded-full border border-white/15 bg-white/[0.06] text-white transition hover:bg-white/15 disabled:pointer-events-none disabled:opacity-30";
+
+  return (
+    <>
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-1.5 text-sm font-medium text-amber-300/80">
+            <Flame className="size-4" /> Por tiempo limitado
+          </p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Ofertas Destacadas</h2>
+        </div>
+        {(edges.prev || edges.next) && (
+          <div className="hidden gap-2 sm:flex">
+            <button type="button" onClick={() => scroll(-1)} disabled={!edges.prev} className={arrow} aria-label="Ofertas anteriores">
+              <ChevronLeft className="size-5" />
+            </button>
+            <button type="button" onClick={() => scroll(1)} disabled={!edges.next} className={arrow} aria-label="Más ofertas">
+              <ChevronRight className="size-5" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div className="relative">
+        <div
+          ref={ref}
+          onScroll={update}
+          className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:scroll-px-6 sm:px-6"
+        >
+          {children}
+        </div>
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-y-0 -right-4 w-16 bg-gradient-to-l from-black to-transparent transition-opacity sm:-right-6 sm:w-24 ${edges.next ? "opacity-100" : "opacity-0"}`}
+        />
+        <div
+          aria-hidden
+          className={`pointer-events-none absolute inset-y-0 -left-4 w-16 bg-gradient-to-r from-black to-transparent transition-opacity sm:-left-6 sm:w-24 ${edges.prev ? "opacity-100" : "opacity-0"}`}
+        />
+      </div>
+    </>
+  );
+}
 
 type Sort = "recent" | "price-asc" | "price-desc";
 type Tab = "all" | Category | "offers";
@@ -64,19 +135,13 @@ export function Storefront({
       {offers.length > 0 && (
         <section id="ofertas" className="scroll-mt-28 border-t border-white/10 bg-gradient-to-b from-amber-500/[0.06] to-transparent">
           <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
-            <div className="mb-6">
-              <p className="flex items-center gap-1.5 text-sm font-medium text-amber-300/80">
-                <Flame className="size-4" /> Por tiempo limitado
-              </p>
-              <h2 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Ofertas Destacadas</h2>
-            </div>
-            <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 sm:-mx-6 sm:px-6">
+            <OffersRail>
               {offers.map((p) => (
                 <div key={p.key} className="w-[85%] shrink-0 snap-start sm:w-[340px]">
                   <ProductCard product={p} onTransfer={setCheckout} arsRate={arsRate} />
                 </div>
               ))}
-            </div>
+            </OffersRail>
           </div>
         </section>
       )}
