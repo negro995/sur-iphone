@@ -8,8 +8,8 @@ Stack: Next.js (App Router) · React · Tailwind CSS · Lucide.
 
 - **Catálogo en vivo**: `src/lib/catalog.ts` lee la hoja de Google (`GOOGLE_SHEET_ID`) y revalida cada 60 s (ISR).
   - Con `GOOGLE_SHEETS_API_KEY` usa la Google Sheets API v4; sin key usa el export CSV público de la hoja (la hoja tiene que estar compartida como "cualquiera con el enlace puede ver").
-  - Las columnas se detectan por el encabezado, así que se pueden reordenar. Encabezados recomendados (minúsculas, sin acentos):
-    `id`, `titulo`, `categoria` (`iPhones` / `Accesorios` / `Combos`), `almacenamiento`, `condicion`, `precio_usd`, `precio_oferta`, `bateria` (ej. `88%`), `estado` (ej. `Excelente`, `Reacondicionado A+`), `imagen_url`, `es_oferta` (`si` / `x`), `stock`.
+  - Las columnas se detectan por el encabezado, así que se pueden reordenar. **Estructura recomendada, columnas y plantillas: [`docs/GOOGLE_SHEETS.md`](docs/GOOGLE_SHEETS.md)**:
+    `id`, `titulo`, `categoria` (`iPhones` / `Accesorios` / `Combos`), `almacenamiento`, `condicion`, `precio_usd`, `precio_oferta`, `bateria` (ej. `90%`), `stock` (unidades o `Disponible` / `Agotado`), `imagen_url`, `es_oferta` (`si` / `x`). Testimonios en una pestaña `Testimonios`: `testimonio`, `cliente`, `ciudad`, `estrellas`, `captura_url`.
   - También siguen funcionando los encabezados de la planilla original (`Modelo de iPhone`, `Almacenamiento (GB)`, `Condición`, `Batería (%)`, `Precio Contado ($)`, `Stock / Estado`).
   - Si `categoria` está vacía se infiere del título (iPhone, cargador/cable/funda/AirPods…, combo/promo).
   - Un producto es oferta si tiene `precio_oferta` o `es_oferta` marcado; aparece con badge y en "Ofertas Destacadas".
@@ -20,6 +20,10 @@ Stack: Next.js (App Router) · React · Tailwind CSS · Lucide.
   - Si `Stock / Estado` dice *Agotado*, *Sin stock*, *Vendido*, *Reservado* o *No disponible*, el equipo se muestra sin botón de compra.
 - **Precios en USD**: si la hoja tiene una columna con "USD" en el encabezado, se usa tal cual. Si no, se convierte el `Precio Contado` (ARS) con `USD_ARS_RATE` o, si está vacío, con la cotización de [dolarapi.com](https://dolarapi.com) (`USD_RATE_SOURCE`, por defecto `blue`). El selector "USD + ARS" del catálogo muestra el estimado en pesos con esa misma cotización, que el navegador refresca cada 5 minutos.
 - **Transferencia / depósito**: el botón "Pagar por Transferencia" abre un resumen con N° de pedido, los datos bancarios (`BANK_CBU`, `BANK_ALIAS`, `BANK_HOLDER`, `BANK_NAME`, `BANK_CUIT` en Vercel → Settings → Environment Variables) y un botón para enviar el comprobante por WhatsApp. Sin datos cargados, ofrece pedirlos por WhatsApp.
+- **Orden del catálogo**: iPhones agrupados por generación (17 → 11, luego X y SE) y dentro de cada una Pro Max → Pro → Plus → base → mini/e; el visitante puede invertirlo ("Desde iPhone 11") u ordenar por precio. Buscador en tiempo real arriba del catálogo (atajo `/`).
+- **Stock bajo**: `stock` = `1` o textos como *Último / Pocas unidades / Stock limitado* muestran "¡Último en stock!".
+- **Cuotas Mercado Pago**: cada tarjeta tiene un simulador de 3, 6, 9 y 12 cuotas sobre el precio en pesos (cotización de la tienda). Recargos estimados en `MP_CUOTAS_RECARGO`.
+- **Analytics**: `NEXT_PUBLIC_GA_ID` (GA4) y `NEXT_PUBLIC_META_PIXEL_ID` (Meta Pixel) miden los clics en los botones de WhatsApp (contado, financiación, transferencia). Detalle de eventos en `docs/GOOGLE_SHEETS.md`.
 - **WhatsApp**: "Comprar Contado (USD)" → +54 2945 54-6004 · "Consultar Financiación / Cuotas" → +54 2945 69-0678 (`src/lib/config.ts`, mensajes en `src/lib/whatsapp.ts`).
 
 ## Desarrollo

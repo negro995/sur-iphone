@@ -96,7 +96,7 @@ const METHODS = [
   {
     icon: Wallet,
     title: "Mercado Pago",
-    desc: "Pagá con tu cuenta de Mercado Pago o dinero en cuenta. Te enviamos el link de pago.",
+    desc: "Hasta 12 cuotas o dinero en cuenta. Simulá las cuotas en cada equipo del catálogo y te enviamos el link de pago.",
     accent: "from-sky-500/20 to-sky-500/0 text-sky-300",
   },
   {
@@ -169,7 +169,7 @@ export function CardsNotice({ className = "" }: { className?: string }) {
         <p className="text-base font-semibold text-balance sm:text-lg">
           Aceptamos todas las tarjetas de crédito (excepto Mastercard) y Mercado Pago
         </p>
-        <p className="mt-1 text-sm text-white/60">Consultá las cuotas disponibles para tu equipo por WhatsApp.</p>
+        <p className="mt-1 text-sm text-white/60">Simulá 3, 6, 9 o 12 cuotas con Mercado Pago en cada equipo del catálogo.</p>
       </div>
     </div>
   );
@@ -179,7 +179,7 @@ export function HowToBuy() {
   const steps = [
     { icon: Smartphone, title: "Elegí tu iPhone", desc: "Filtrá por generación y mirá capacidad, condición y batería." },
     { icon: MessageCircle, title: "Escribinos por WhatsApp", desc: "Con un toque te llega un mensaje armado con el equipo que elegiste." },
-    { icon: Handshake, title: "Coordinamos pago y entrega", desc: "Contado en USD, Mercado Pago o 3 cuotas con tarjeta." },
+    { icon: Handshake, title: "Coordinamos pago y entrega", desc: "Contado en USD, transferencia o hasta 12 cuotas con Mercado Pago." },
   ];
   return (
     <section id="como-comprar" className="scroll-mt-20 border-t border-white/10">

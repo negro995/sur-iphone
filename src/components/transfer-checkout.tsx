@@ -5,6 +5,7 @@ import { Check, Copy, Landmark, Receipt, X } from "lucide-react";
 import type { BankDetails, Product } from "@/lib/types";
 import { formatUSD } from "@/lib/format";
 import { finalPrice } from "@/lib/product";
+import { trackAttrs } from "@/lib/analytics";
 import { bankDetailsRequestLink, newOrderNumber, transferReceiptLink } from "@/lib/whatsapp";
 import { ProductImage } from "./product-media";
 import { WhatsAppIcon } from "./brand-icons";
@@ -99,6 +100,7 @@ export function TransferCheckout({
               Pedinos los datos bancarios por WhatsApp y te los enviamos al instante.
               <a
                 href={bankDetailsRequestLink(p, orderNumber)}
+                {...trackAttrs("comprobante", p.title, finalPrice(p))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-3 flex items-center justify-center gap-2 rounded-full border border-white/15 px-4 py-2.5 font-medium text-white hover:bg-white/5"
@@ -113,6 +115,7 @@ export function TransferCheckout({
           <h3 className="mb-2 text-sm font-semibold text-white/80">2. Envianos el comprobante</h3>
           <a
             href={transferReceiptLink(p, orderNumber)}
+            {...trackAttrs("comprobante", p.title, finalPrice(p))}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-4 py-3.5 text-sm font-semibold text-black transition hover:brightness-110 active:scale-[0.98]"

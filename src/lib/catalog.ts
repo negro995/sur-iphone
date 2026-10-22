@@ -1,5 +1,5 @@
 import { STORE } from "./config";
-import { normalizeImageUrl, normalizeText } from "./product";
+import { normalizeImageUrl, normalizeText, sortByModel } from "./product";
 import type { Catalog, Category, Product, Testimonial, UsdRate } from "./types";
 
 export const REVALIDATE_SECONDS = 60;
@@ -7,6 +7,8 @@ export const REVALIDATE_SECONDS = 60;
 type Grid = string[][];
 
 const SOLD_OUT = /(agotad|sin stock|vendid|no disponible|reservad)/i;
+const LOW_STOCK = /(ultim|unic[oa] (unidad|en stock)|1 unidad|pocas|poco stock|limitad|queda(n)? (1|pocos?))/i;
+const AVAILABILITY = /(agotad|sin stock|vendid|no disponible|reservad|disponible|en stock|ultim|pocas|limitad)/i;
 const FALSY = /^(no|n|false|falso|0)$/i;
 const TRUTHY = /^(si|sí|s|true|verdadero|x|1|yes|oferta|✓|✔|✅)$/i;
 const ACCESSORY = /(cargador|cable|adaptador|auricular|airpods|funda|case|vidrio|templado|protector|magsafe|power ?bank|fuente|cabezal|soporte|malla|correa)/i;
@@ -80,14 +82,35 @@ export function parseCategory(raw: string, title: string): Category {
   return "Accesorios";
 }
 
-function parseBattery(raw: string): string | null {
-  if (!raw || /^(n\/?a|-|—|no aplica)$/i.test(raw)) return null;
-  if (/^\d+([.,]\d+)?$/.test(raw)) {
-    const n = Number(raw.replace(",", "."));
-    const isFraction = /[.,]/.test(raw) && n <= 1;
-    return `${Math.round(isFraction ? n * 100 : n)}%`;
+/** "88" / "88 %" / "0,88" → "88%"; empty, "N/A" or "consultar" → null (the card asks to consult). */
+export function parseBattery(raw: string): string | null {
+  const v = raw.trim();
+  if (!v || /^(n\/?a|-|—|no aplica|\?+|s\/?d)$/i.test(v) || /consult|pregunt/i.test(v)) return null;
+  const m = v.match(/^(\d+([.,]\d+)?)\s*%?$/);
+  if (m) {
+    const n = Number(m[1].replace(",", "."));
+    const isFraction = /[.,]/.test(m[1]) && n <= 1;
+    const pct = Math.round(isFraction ? n * 100 : n);
+    return pct > 0 && pct <= 100 ? `${pct}%` : null;
   }
-  return raw;
+  return v;
+}
+
+/**
+ * Reads the `stock` cell (or `estado` when it holds availability): a number of units
+ * ("0", "1", "3 unidades") or text ("Disponible", "Agotado", "Último", "Pocas unidades").
+ */
+export function parseStock(raw: string): Pick<Product, "stock" | "quantity" | "available" | "lowStock"> {
+  const v = raw.trim();
+  const units = v.match(/^(\d+)\s*(u|un|unid|unidad|unidades)?\.?$/i);
+  if (units) {
+    const quantity = Number(units[1]);
+    if (quantity <= 0) return { stock: "Agotado", quantity: 0, available: false, lowStock: false };
+    return { stock: quantity === 1 ? "Último en stock" : "Disponible", quantity, available: true, lowStock: quantity === 1 };
+  }
+  if (!v) return { stock: "Disponible", quantity: null, available: true, lowStock: false };
+  const available = !SOLD_OUT.test(v);
+  return { stock: v, quantity: null, available, lowStock: available && LOW_STOCK.test(normalizeText(v)) };
 }
 
 function emptyToNull(s: string) {
@@ -111,7 +134,6 @@ function isHeaderRow(row: string[]) {
 /** A tab may hold several blocks (e.g. iPhones, then accessories below), each with its own header row. */
 export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = ""): Product[] {
   const starts = grid.flatMap((r, i) => (isHeaderRow(r) ? [i] : []));
-  if (!starts.length) throw new Error("No se encontró la fila de encabezados (titulo / Modelo)");
   const bounds = sectionBounds(grid);
   return starts.flatMap((start, s) =>
     parseSection(
@@ -121,6 +143,10 @@ export function gridToProducts(grid: Grid, usdRate: number | null, keyPrefix = "
       s ? `${keyPrefix}${s}-` : keyPrefix,
     ),
   );
+}
+
+export function hasProductHeader(grid: Grid) {
+  return grid.some(isHeaderRow);
 }
 
 function sectionBounds(grid: Grid) {
@@ -201,7 +227,9 @@ function parseSection(header: string[], rows: Grid, usdRate: number | null, keyP
     const flagged = TRUTHY.test(cell(col.offerFlag));
     if (FALSY.test(cell(col.offerFlag))) offerPriceUSD = null;
 
-    const stock = cell(col.stock) || "Disponible";
+    const rawState = cell(col.state);
+    const stateIsAvailability = AVAILABILITY.test(normalizeText(rawState));
+    const stock = parseStock(cell(col.stock) || (stateIsAvailability ? rawState : ""));
     const gen = category === "iPhones" ? title.match(/iphone\s*(\d{2})/i) : null;
     const storage = emptyToNull(cell(col.storage));
 
@@ -213,14 +241,13 @@ function parseSection(header: string[], rows: Grid, usdRate: number | null, keyP
       generation: gen ? Number(gen[1]) : null,
       storage: storage ? storage.replace(/\s*gb$/i, " GB").replace(/\s*tb$/i, " TB") : null,
       condition: emptyToNull(cell(col.condition)),
-      state: emptyToNull(cell(col.state)),
+      state: stateIsAvailability ? null : emptyToNull(rawState),
       battery: category === "iPhones" || /iphone/i.test(title) ? parseBattery(cell(col.battery)) : null,
       priceUSD,
       offerPriceUSD,
       isOffer: flagged || offerPriceUSD != null,
       imageUrl: normalizeImageUrl(cell(col.image)),
-      stock,
-      available: !SOLD_OUT.test(stock),
+      ...stock,
     });
   });
   return products;
@@ -243,7 +270,7 @@ async function fetchGrids(): Promise<{ grids: Grid[]; source: Catalog["source"] 
   }
 
   if (key && !csvUrls) {
-    const ranges = list(process.env.GOOGLE_SHEET_RANGE, "A1:Z500")
+    const ranges = (process.env.GOOGLE_SHEET_RANGE ? list(process.env.GOOGLE_SHEET_RANGE, "") : await allTabRanges(key, opts))
       .map((r) => `ranges=${encodeURIComponent(r)}`)
       .join("&");
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${STORE.sheetId}/values:batchGet?${ranges}&valueRenderOption=FORMATTED_VALUE&key=${key}`;
@@ -268,6 +295,18 @@ async function fetchGrids(): Promise<{ grids: Grid[]; source: Catalog["source"] 
   return { grids, source: "csv" };
 }
 
+/** Without GOOGLE_SHEET_RANGE every tab is read (e.g. "Catalogo" + "Testimonios"). */
+async function allTabRanges(key: string, opts: RequestInit) {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${STORE.sheetId}?fields=sheets.properties.title&key=${key}`,
+    opts,
+  );
+  if (!res.ok) return ["A1:Z500"];
+  const data = (await res.json()) as { sheets?: { properties?: { title?: string } }[] };
+  const titles = (data.sheets ?? []).flatMap((s) => (s.properties?.title ? [s.properties.title] : []));
+  return titles.length ? titles.map((t) => `'${t.replace(/'/g, "''")}'!A1:Z500`) : ["A1:Z500"];
+}
+
 export const RATE_SOURCE = process.env.USD_RATE_SOURCE ?? "blue";
 
 /** ARS per USD: converts the sheet's peso prices and powers the ARS estimate in the UI. */
@@ -287,21 +326,15 @@ async function fetchUsdRate(): Promise<UsdRate | null> {
   }
 }
 
-const CATEGORY_ORDER: Record<Category, number> = { iPhones: 0, Combos: 1, Accesorios: 2 };
-
+/** Newest iPhones first (17 → 11), grouped by model; see `compareModels`. */
 export function sortProducts(products: Product[]) {
-  return [...products].sort(
-    (a, b) =>
-      Number(b.available) - Number(a.available) ||
-      CATEGORY_ORDER[a.category] - CATEGORY_ORDER[b.category] ||
-      (b.generation ?? 0) - (a.generation ?? 0) ||
-      (a.priceUSD ?? 0) - (b.priceUSD ?? 0),
-  );
+  return sortByModel(products, "desc");
 }
 
 export async function getCatalog(): Promise<Catalog> {
   try {
     const [{ grids, source }, rate] = await Promise.all([fetchGrids(), fetchUsdRate()]);
+    if (!grids.some(hasProductHeader)) throw new Error("No se encontró la fila de encabezados (titulo / Modelo)");
     const products = sortProducts(grids.flatMap((g, i) => gridToProducts(g, rate?.ars ?? null, `${i}-`)));
     const testimonials = grids.flatMap((g, i) => gridToTestimonials(g, `${i}-`));
     return { products, testimonials, usdRate: rate, updatedAt: new Date().toISOString(), source };

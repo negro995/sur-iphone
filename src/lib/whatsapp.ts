@@ -1,6 +1,7 @@
 import { STORE } from "./config";
 import type { Product } from "./types";
-import { formatUSD } from "./format";
+import { formatPesos, formatUSD } from "./format";
+import type { InstallmentQuote } from "./installments";
 import { finalPrice } from "./product";
 
 function waLink(phone: string, text: string) {
@@ -52,14 +53,19 @@ export function bankDetailsRequestLink(p: Product, orderNumber: string) {
   return waLink(STORE.whatsapp.sales, text);
 }
 
-export function financingLink(p?: Product) {
+export function financingLink(p?: Product, plan?: InstallmentQuote) {
   const text = p
     ? [
         `¡Hola ${STORE.name}! 👋 Quiero consultar financiación / cuotas para:`,
         "",
         ...productLines(p),
+        ...(plan
+          ? [`💳 Simulé: ${plan.installments} cuotas de ${formatPesos(plan.perInstallment)} con Mercado Pago (total ${formatPesos(plan.total)})`]
+          : []),
         "",
-        "¿Qué opciones tienen con tarjeta de crédito (3 cuotas) o Mercado Pago?",
+        plan
+          ? `¿Me confirman el valor final y me pasan el link de pago en ${plan.installments} cuotas?`
+          : "¿Qué opciones tienen con tarjeta de crédito o Mercado Pago (3, 6, 9 o 12 cuotas)?",
       ].join("\n")
     : `¡Hola ${STORE.name}! 👋 Quiero consultar por financiación y cuotas con tarjeta de crédito o Mercado Pago.`;
   return waLink(STORE.whatsapp.financing, text);
@@ -73,4 +79,13 @@ export function newOrderNumber(now = new Date()) {
   const ymd = `${now.getFullYear() % 100}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
   const rand = Math.random().toString(36).slice(2, 6).toUpperCase().padEnd(4, "0");
   return `SUR-${ymd}-${rand}`;
+}
+
+export function batteryQuestionLink(p: Product) {
+  const text = [
+    `¡Hola ${STORE.name}! 👋 ¿Qué porcentaje de batería tiene este equipo?`,
+    "",
+    ...productLines(p),
+  ].join("\n");
+  return waLink(STORE.whatsapp.sales, text);
 }

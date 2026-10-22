@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import { RATE_SOURCE, getCatalog } from "@/lib/catalog";
 import { getBankDetails } from "@/lib/bank";
+import { parseSurcharges } from "@/lib/installments";
 import { finalPrice } from "@/lib/product";
 import { Header } from "@/components/header";
 import { Storefront } from "@/components/storefront";
@@ -45,6 +46,7 @@ export default async function Home() {
             bank={getBankDetails()}
             usdRate={catalog.usdRate}
             rateSource={RATE_SOURCE}
+            surcharges={parseSurcharges(process.env.MP_CUOTAS_RECARGO)}
           />
         )}
 
