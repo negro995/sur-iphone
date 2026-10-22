@@ -7,6 +7,9 @@ const FILL = 0.9;
 const BG_TOLERANCE = 26;
 /** Share of the border that must match the background colour to treat it as a plain studio backdrop. */
 const UNIFORM_BORDER = 0.9;
+/** Photos whose aspect ratio is within this share of 3:2 are filled edge to edge (tiny centre crop). */
+const NEAR_3_2 = 0.12;
+const ALPHA_CUTOFF = 16;
 
 type Raw = { data: Buffer; width: number; height: number };
 
@@ -31,6 +34,16 @@ export function plainBackdrop({ data, width, height }: Raw): [number, number, nu
   const c: [number, number, number] = [ch(0), ch(1), ch(2)];
   const close = ids.filter((p) => dist(data, p * 4, c) <= BG_TOLERANCE).length;
   return close / ids.length >= UNIFORM_BORDER ? c : null;
+}
+
+/** Mask from the alpha channel when the image already comes cut out (transparent PNG/WebP border). */
+export function alphaMask({ data, width, height }: Raw): Uint8Array | null {
+  const ids = borderIndices(width, height);
+  const clear = ids.filter((p) => data[p * 4 + 3] < ALPHA_CUTOFF).length;
+  if (clear / ids.length < UNIFORM_BORDER) return null;
+  const mask = new Uint8Array(width * height);
+  for (let p = 0; p < mask.length; p++) mask[p] = data[p * 4 + 3] >= ALPHA_CUTOFF ? 255 : 0;
+  return mask;
 }
 
 /** Flood-fills the backdrop from the edges; returns a mask (255 = product, 0 = backdrop). */
@@ -75,25 +88,45 @@ function bbox(mask: Uint8Array, width: number, height: number) {
 }
 
 /**
- * Normalises a catalogue photo to a 3:2 WebP. Plain studio backdrops (white/grey sheets,
- * renders) are removed so the device sits on the card's own grey with a soft shadow;
- * photos taken in a real scene are only resized, never cropped.
+ * Real-scene photo on the exact 3:2 canvas without distortion: near-3:2 photos fill it
+ * (minimal centre crop); portrait/square ones are fitted whole over a blurred copy of themselves.
+ */
+async function sceneOnCanvas(input: Buffer, width: number, height: number) {
+  const ratio = width / height / (CANVAS.width / CANVAS.height);
+  if (Math.abs(ratio - 1) <= NEAR_3_2) {
+    const data = await sharp(input).rotate().resize({ ...CANVAS, fit: "cover", position: "centre" }).webp({ quality: 82 }).toBuffer();
+    return { data, removedBackground: false, fit: "cover" as const };
+  }
+  const backdrop = await sharp(input)
+    .rotate()
+    .resize({ ...CANVAS, fit: "cover" })
+    .blur(40)
+    .modulate({ brightness: 0.75 })
+    .toBuffer();
+  const photo = await sharp(input).rotate().resize({ ...CANVAS, fit: "inside" }).toBuffer();
+  const data = await sharp(backdrop)
+    .composite([{ input: photo, gravity: "centre" }])
+    .webp({ quality: 82 })
+    .toBuffer();
+  return { data, removedBackground: false, fit: "contain" as const };
+}
+
+/**
+ * Normalises a catalogue photo to a 1200×800 (3:2) WebP, never stretching it. Plain studio
+ * backdrops (white/grey sheets, renders) and transparent PNGs become a cut-out centred on the
+ * card's own grey with a soft shadow; photos taken in a real scene are fitted, not deformed.
  */
 export async function prepareProductImage(input: Buffer) {
   const base = sharp(input).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true });
   const { data, info } = await base.ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const raw = { data, width: info.width, height: info.height };
-  const bg = plainBackdrop(raw);
-  const mask = bg && productMask(raw, bg);
+  const transparent = alphaMask(raw);
+  const bg = transparent ? null : plainBackdrop(raw);
+  const mask = transparent ?? (bg && productMask(raw, bg));
   const box = mask && bbox(mask, raw.width, raw.height);
 
   if (!mask || !box || box.width * box.height < raw.width * raw.height * 0.02) {
-    const data = await sharp(input)
-      .rotate()
-      .resize({ ...CANVAS, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer();
-    return { data, removedBackground: false };
+    return sceneOnCanvas(input, raw.width, raw.height);
   }
 
   // Feather the cut edge inwards only, so no backdrop colour bleeds into the halo.
@@ -133,5 +166,5 @@ export async function prepareProductImage(input: Buffer) {
     ])
     .webp({ quality: 85, alphaQuality: 90 })
     .toBuffer();
-  return { data: out, removedBackground: true };
+  return { data: out, removedBackground: true, fit: "cutout" as const };
 }

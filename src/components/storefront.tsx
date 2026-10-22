@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, Flame, RefreshCw, Search, SearchX } from "lucide-react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDownWideNarrow, ChevronLeft, ChevronRight, Flame, RefreshCw, Search, SearchX, X } from "lucide-react";
 import type { BankDetails, Category, Product, UsdRate } from "@/lib/types";
 import { GENERATIONS } from "@/lib/config";
+import type { Surcharges } from "@/lib/installments";
 import {
   CATEGORIES,
   type ConditionGroup,
   conditionGroup,
+  generationLabel,
   matchesQuery,
+  modelGeneration,
+  sortByModel,
   sortByPrice,
   storageGB,
   storageLabel,
@@ -87,7 +91,22 @@ function OffersRail({ children }: { children: React.ReactNode }) {
   );
 }
 
-type Sort = "recent" | "price-asc" | "price-desc";
+type Sort = "newest" | "oldest" | "price-asc" | "price-desc";
+
+type Group = { key: string; label: string | null; items: Product[] };
+
+/** Splits a model-sorted list into "iPhone 16", "iPhone 15"…, "Combos", "Accesorios" blocks. */
+function groupByModel(list: Product[]): Group[] {
+  const groups: Group[] = [];
+  for (const p of list) {
+    const gen = p.category === "iPhones" ? modelGeneration(p) : null;
+    const key = p.category === "iPhones" ? `gen-${gen ?? "otros"}` : p.category;
+    const last = groups[groups.length - 1];
+    if (last?.key === key) last.items.push(p);
+    else groups.push({ key, label: gen ? generationLabel(gen) : p.category === "iPhones" ? "Otros iPhone" : p.category, items: [p] });
+  }
+  return groups;
+}
 type Tab = "all" | Category | "offers";
 
 type Currency = "USD" | "ARS";
@@ -117,16 +136,19 @@ export function Storefront({
   bank,
   usdRate,
   rateSource,
+  surcharges,
 }: {
   products: Product[];
   bank: BankDetails;
   usdRate: UsdRate | null;
   rateSource: string;
+  surcharges: Surcharges;
 }) {
   const [checkout, setCheckout] = useState<Product | null>(null);
   const [currency, setCurrency] = useState<Currency>("USD");
   const rate = useLiveRate(usdRate, rateSource);
   const arsRate = currency === "ARS" && rate ? rate.ars : null;
+  const quoteRate = rate?.ars ?? null;
   const closeCheckout = useCallback(() => setCheckout(null), []);
   const offers = useMemo(() => products.filter((p) => p.isOffer && p.available), [products]);
 
@@ -138,7 +160,7 @@ export function Storefront({
             <OffersRail>
               {offers.map((p) => (
                 <div key={p.key} className="w-[85%] shrink-0 snap-start sm:w-[340px]">
-                  <ProductCard product={p} onTransfer={setCheckout} arsRate={arsRate} />
+                  <ProductCard product={p} onTransfer={setCheckout} arsRate={arsRate} quoteRate={quoteRate} surcharges={surcharges} />
                 </div>
               ))}
             </OffersRail>
@@ -159,7 +181,14 @@ export function Storefront({
               <p className="text-sm text-white/50">Precios en USD · pago único contado / transferencia</p>
             )}
           </div>
-          <CatalogGrid products={products} offersCount={offers.length} onTransfer={setCheckout} arsRate={arsRate} />
+          <CatalogGrid
+            products={products}
+            offersCount={offers.length}
+            onTransfer={setCheckout}
+            arsRate={arsRate}
+            quoteRate={quoteRate}
+            surcharges={surcharges}
+          />
         </div>
       </section>
 
@@ -220,18 +249,35 @@ function CatalogGrid({
   offersCount,
   onTransfer,
   arsRate,
+  quoteRate,
+  surcharges,
 }: {
   products: Product[];
   offersCount: number;
   onTransfer: (p: Product) => void;
   arsRate: number | null;
+  quoteRate: number | null;
+  surcharges: Surcharges;
 }) {
   const [tab, setTab] = useState<Tab>("all");
   const [gen, setGen] = useState<number | "all">("all");
   const [storage, setStorage] = useState<number | "all">("all");
   const [cond, setCond] = useState<ConditionGroup | "all">("all");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<Sort>("recent");
+  const deferredQuery = useDeferredValue(query);
+  const [sort, setSort] = useState<Sort>("newest");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "/" || t?.closest("input, textarea, select, [contenteditable]")) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const catCounts = useMemo(() => {
     const m = new Map<Category, number>();
@@ -276,11 +322,16 @@ function CatalogGrid({
         (!showGenerations || gen === "all" || p.generation === gen) &&
         (storage === "all" || storageGB(p) === storage) &&
         (cond === "all" || conditionGroup(p) === cond) &&
-        matchesQuery(p, query),
+        matchesQuery(p, deferredQuery),
     );
-    if (sort === "recent") return list;
+    if (sort === "newest" || sort === "oldest") return sortByModel(list, sort === "newest" ? "desc" : "asc");
     return sortByPrice(list, sort === "price-asc" ? "asc" : "desc");
-  }, [inTab, gen, storage, cond, query, sort, showGenerations]);
+  }, [inTab, gen, storage, cond, deferredQuery, sort, showGenerations]);
+
+  const groups = useMemo<Group[]>(
+    () => (sort === "newest" || sort === "oldest" ? groupByModel(visible) : [{ key: "all", label: null, items: visible }]),
+    [visible, sort],
+  );
 
   const filtered = gen !== "all" || storage !== "all" || cond !== "all";
   const clearFilters = () => {
@@ -297,6 +348,60 @@ function CatalogGrid({
   return (
     <div>
       <div className="z-30 sm:sticky sm:top-[4.5rem] -mx-4 mb-8 border-b border-white/5 bg-black/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6">
+        <div className="mb-3 flex gap-2">
+          <label className="relative flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-white/50" />
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+              placeholder='Buscá tu modelo: "13 Pro", "15 128gb", "Cargador 20W"'
+              aria-label="Buscar productos"
+              autoComplete="off"
+              enterKeyHint="search"
+              className="w-full rounded-full border border-white/15 bg-white/[0.08] py-3 pr-24 pl-10 text-base text-white placeholder:text-white/40 focus:border-white/40 focus:bg-white/10 focus:outline-none sm:text-sm [&::-webkit-search-cancel-button]:hidden"
+            />
+            <span className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1.5">
+              {query ? (
+                <>
+                  <span className="text-xs text-white/50" aria-live="polite">
+                    {visible.length} {visible.length === 1 ? "resultado" : "resultados"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQuery("");
+                      searchRef.current?.focus();
+                    }}
+                    aria-label="Borrar búsqueda"
+                    className="grid size-7 place-items-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </>
+              ) : (
+                <kbd className="hidden rounded-md border border-white/15 px-1.5 py-0.5 font-sans text-[11px] text-white/40 sm:block">/</kbd>
+              )}
+            </span>
+          </label>
+          <label className="relative">
+            <ArrowDownWideNarrow className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              aria-label="Ordenar"
+              className="h-full appearance-none rounded-full border border-white/10 bg-white/5 py-2.5 pr-4 pl-9 text-sm text-white focus:border-white/30 focus:outline-none"
+            >
+              <option value="newest" className="bg-neutral-900">Más nuevos primero</option>
+              <option value="oldest" className="bg-neutral-900">Desde iPhone 11</option>
+              <option value="price-asc" className="bg-neutral-900">Menor precio</option>
+              <option value="price-desc" className="bg-neutral-900">Mayor precio</option>
+            </select>
+          </label>
+        </div>
+
         <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Categorías">
           <div className="flex shrink-0 gap-1 rounded-full border border-white/10 bg-white/5 p-1">
             <CategoryTab active={tab === "all"} onClick={() => selectTab("all")} count={products.length}>
@@ -369,38 +474,32 @@ function CatalogGrid({
           </div>
         )}
 
-        <div className="mt-3 flex gap-2">
-          <label className="relative flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder='Buscar: "iPhone 13 128gb" o "Cargador 20W"'
-              aria-label="Buscar productos"
-              className="w-full rounded-full border border-white/10 bg-white/5 py-2.5 pr-4 pl-9 text-base text-white placeholder:text-white/40 focus:border-white/30 focus:outline-none sm:text-sm"
-            />
-          </label>
-          <label className="relative">
-            <ArrowDownWideNarrow className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as Sort)}
-              aria-label="Ordenar"
-              className="h-full appearance-none rounded-full border border-white/10 bg-white/5 py-2.5 pr-4 pl-9 text-sm text-white focus:border-white/30 focus:outline-none"
-            >
-              <option value="recent" className="bg-neutral-900">Destacados</option>
-              <option value="price-asc" className="bg-neutral-900">Menor precio</option>
-              <option value="price-desc" className="bg-neutral-900">Mayor precio</option>
-            </select>
-          </label>
-        </div>
       </div>
 
       {visible.length ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((p) => (
-            <ProductCard key={p.key} product={p} onTransfer={onTransfer} arsRate={arsRate} />
+        <div className="flex flex-col gap-10">
+          {groups.map((g) => (
+            <div key={g.key}>
+              {g.label && groups.length > 1 && (
+                <h3 className="mb-4 flex items-center gap-3 text-lg font-semibold tracking-tight text-white/90">
+                  {g.label}
+                  <span className="text-sm font-normal text-white/40">{g.items.length}</span>
+                  <span className="h-px flex-1 bg-white/10" />
+                </h3>
+              )}
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {g.items.map((p) => (
+                  <ProductCard
+                    key={p.key}
+                    product={p}
+                    onTransfer={onTransfer}
+                    arsRate={arsRate}
+                    quoteRate={quoteRate}
+                    surcharges={surcharges}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : (

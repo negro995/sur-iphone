@@ -18,12 +18,13 @@ export async function GET(request: Request) {
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.byteLength > MAX_BYTES) return new Response("Image too large", { status: 413 });
 
-    const { data, removedBackground } = await prepareProductImage(buf);
+    const { data, removedBackground, fit } = await prepareProductImage(buf);
     return new Response(new Uint8Array(data), {
       headers: {
         "Content-Type": "image/webp",
         "Cache-Control": "public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400",
         "X-Background": removedBackground ? "removed" : "kept",
+        "X-Fit": fit,
       },
     });
   } catch {

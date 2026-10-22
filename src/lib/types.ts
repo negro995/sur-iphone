@@ -14,8 +14,13 @@ export type Product = {
   offerPriceUSD: number | null;
   isOffer: boolean;
   imageUrl: string | null;
+  /** Label shown on the card ("Disponible", "Agotado", "Último en stock"…). */
   stock: string;
+  /** Units in stock when the sheet uses a number (e.g. `stock` = 3), else null. */
+  quantity: number | null;
   available: boolean;
+  /** Only one unit left or the sheet says "último / pocas unidades / limitado". */
+  lowStock: boolean;
 };
 
 export type Testimonial = {

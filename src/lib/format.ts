@@ -6,3 +6,8 @@ export function formatUSD(value: number) {
 export function formatARS(value: number) {
   return `$ ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(Math.round(value / 1000) * 1000)}`;
 }
+
+/** Exact peso amount (installments), e.g. "$ 245.300". */
+export function formatPesos(value: number) {
+  return `$ ${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 }).format(Math.round(value))}`;
+}
